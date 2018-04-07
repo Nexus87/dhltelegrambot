@@ -5,11 +5,15 @@ open ApiRequests
 open ApiTypes
 open DhlParser
 open FSharp.Control.Reactive
+open FSharp.Configuration
 open System
 
-let API_KEY = ""
-let trackingNumber = ""
-let chatId = 0
+type Config = YamlConfig<"Config.yaml">
+let config = new Config();
+
+let API_KEY = config.BotApiToken
+let trackingNumber = config.TrackingNumber
+let chatId = int64(config.ChatId)
 
 let rec listen config lastId messageHandler = 
     match getMessages config lastId with
