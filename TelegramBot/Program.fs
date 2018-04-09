@@ -1,71 +1,69 @@
 ﻿// Learn more about F# at http://fsharp.org
 
-open GetMessages
-open ApiRequests
-open ApiTypes
 open DhlParser
 open FSharp.Control.Reactive
 open System
-
+open TelegramBotApi
 let API_KEY = System.Environment.GetEnvironmentVariable("BOTKEY")
 let trackingNumber = System.Environment.GetEnvironmentVariable("TRACKINGNUMBER")
 let chatId = int64(System.Environment.GetEnvironmentVariable("CHATID"))
 
-let rec listen config lastId messageHandler = 
-    match getMessages config lastId with
-        | Some (updateId, messages) ->
-            let nextId = (updateId |> Option.defaultValue -1) + 1
-    
-            for m in messages do
-                match messageHandler m with
-                | Some x -> x
-                                    |> sendMessage API_KEY
-                                    |> printfn "%A"
-                | _ -> ()
-    
-            listen config nextId messageHandler
-        | None -> listen config lastId messageHandler
-    
+type DbRecord = {
+    currentState: int;
+    totalState: int;
+    trackingNumber: string;
+    chatId: int64;
+}
 
-let startListen config messageHandler = listen config 0 messageHandler
+let statusMessage chatId (x: Package) =
+    sprintf "%s: (%d/%d): %s" x.trackingNumber x.currentState x.totalState x.statusText
+    |> simpleTextMessage chatId
 
-let echo (x: GetMessages.Message): SendMessage = 
-    printfn "%A" x
-    {
-        chat_id = x.chat_id;
-        text = sprintf "%A" x.content ;
-        parse_mode = None;
-        disable_web_page_preview = None;
-        disable_notification = None;
-        reply_to_message_id = Some x.message_id
-    }
 
-let textMessage x =
-    {
-        chat_id = int64(chatId);
-        text = x;
-        parse_mode = None;
-        disable_web_page_preview = None;
-        disable_notification = None;
-        reply_to_message_id = None;
-    }
+let ignoreUnchanged (previousStatus: DbRecord) (package: Package option) =
+    package 
+        |> Option.bind (fun x -> if x.currentState <> previousStatus.currentState then Some x else None)
+
+let sendTrackingUpdate api_key chatId package =
+    package 
+        |> Option.map(fun x -> x |> statusMessage chatId |> sendMessage api_key)
+        |> ignore
+    package
+
+let updateDbRecord (previousRecord: DbRecord) (package: Package option)=
+    package
+        |> Option.map(fun x -> {previousRecord with currentState = x.currentState; totalState = x.totalState})
+
+let processTrackingNumbers (previousStatus: DbRecord) = 
+    getStatus previousStatus.trackingNumber
+    |> Observable.map (ignoreUnchanged previousStatus)
+    |> Observable.map (sendTrackingUpdate API_KEY previousStatus.chatId)
+    |> Observable.map (updateDbRecord previousStatus)
+
+
+let trackingNumbers = Observable.ofSeq [[
+                                            {
+                                                currentState = 4;
+                                                totalState = 5;
+                                                trackingNumber = trackingNumber;
+                                                chatId = chatId
+                                            }
+]]
+
 
 [<EntryPoint>]
 let main _ =
-    let messageHandler = 
-        fun x -> 
-            printfn "%A" x
-            None
-
-    let config = { DefaultConfig with apiKey = API_KEY }
-    Observable.timerPeriod DateTimeOffset.Now (TimeSpan.FromMinutes 30.0)
-        |> Observable.map (fun _ -> getStatus trackingNumber |> Option.defaultValue "")
-        |> Observable.filter (fun x -> String.IsNullOrWhiteSpace(x) |> not)
-        |> Observable.distinctUntilChanged
-        |> Observable.subscribe (fun x -> x |> textMessage |> sendMessage API_KEY |> ignore)
+    let update =Observable.timerPeriod DateTimeOffset.Now (TimeSpan.FromMinutes 30.0)
+                |> Observable.flatmap (fun _ -> trackingNumbers)
+                |> Observable.map (Seq.map processTrackingNumbers)
+                |> Observable.flatmap (Observable.zipSeq)
+                |> Observable.map (Seq.choose id)
+                |> Observable.subscribe ignore
+            
+    AppDomain.CurrentDomain.ProcessExit
+        |> Async.AwaitEvent
+        |> Async.RunSynchronously
+        |> (fun _ -> update.Dispose())
         |> ignore
-    
-    startListen config messageHandler
-
     0 // return an integer exit code
     

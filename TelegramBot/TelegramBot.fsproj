@@ -6,9 +6,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Observable.fs" />
     <Compile Include="Api\Converter.fs" />
     <Compile Include="Api\ApiTypes.fs" />
     <Compile Include="Api\ApiRequests.fs" />
+    <Compile Include="Api\TelegramBotApi.fs" />
     <Compile Include="DhlParser.fs" />
     <Compile Include="GetMessages.fs" />
     <Compile Include="Program.fs" />
