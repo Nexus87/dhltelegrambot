@@ -4,16 +4,9 @@ open DhlParser
 open FSharp.Control.Reactive
 open System
 open TelegramBotApi
-let API_KEY = System.Environment.GetEnvironmentVariable("BOTKEY")
-let trackingNumber = System.Environment.GetEnvironmentVariable("TRACKINGNUMBER")
-let chatId = int64(System.Environment.GetEnvironmentVariable("CHATID"))
+open Database
 
-type DbRecord = {
-    currentState: int;
-    totalState: int;
-    trackingNumber: string;
-    chatId: int64;
-}
+let API_KEY = System.Environment.GetEnvironmentVariable("BOTKEY")
 
 let statusMessage chatId (x: Package) =
     sprintf "%s: (%d/%d): %s" x.trackingNumber x.currentState x.totalState x.statusText
@@ -41,20 +34,10 @@ let processTrackingNumbers (previousStatus: DbRecord) =
     |> Observable.map (updateDbRecord previousStatus)
 
 
-let trackingNumbers = Observable.ofSeq [[
-                                            {
-                                                currentState = 4;
-                                                totalState = 5;
-                                                trackingNumber = trackingNumber;
-                                                chatId = chatId
-                                            }
-]]
-
-
 [<EntryPoint>]
 let main _ =
     let update =Observable.timerPeriod DateTimeOffset.Now (TimeSpan.FromMinutes 30.0)
-                |> Observable.flatmap (fun _ -> trackingNumbers)
+                |> Observable.map (fun _ -> getTrackingNumbers())
                 |> Observable.map (Seq.map processTrackingNumbers)
                 |> Observable.flatmap (Observable.zipSeq)
                 |> Observable.map (Seq.choose id)

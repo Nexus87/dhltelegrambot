@@ -22,7 +22,6 @@ let findStatusText (x: HtmlNode) =
         |> Option.map (fun y -> y.InnerText())
         |> Option.map (fun y -> (y.IndexOf(":") + 1 )|> y.Substring)
 
-
 let getStatusAync number = async {
     let url = sprintf "https://nolp.dhl.de/nextt-online-public/set_identcodes.do?lang=en&idc=%s&extendedSearch=true" number
     let! result = HtmlDocument.AsyncLoad(url)
