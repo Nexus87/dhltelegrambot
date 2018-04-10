@@ -33,15 +33,18 @@ let processTrackingNumbers (previousStatus: DbRecord) =
     |> Observable.map (sendTrackingUpdate API_KEY previousStatus.chatId)
     |> Observable.map (updateDbRecord previousStatus)
 
-
 [<EntryPoint>]
 let main _ =
     let update =Observable.timerPeriod DateTimeOffset.Now (TimeSpan.FromMinutes 30.0)
-                |> Observable.map (fun _ -> getTrackingNumbers())
+                |> Observable.map (fun _ -> getUnfinishedTrackingNumbers())
                 |> Observable.map (Seq.map processTrackingNumbers)
                 |> Observable.flatmap (Observable.zipSeq)
                 |> Observable.map (Seq.choose id)
-                |> Observable.subscribe ignore
+                |> Observable.map (Seq.map updateState)
+                |> Observable.subscribe (fun x -> 
+                    x |> Seq.toList  |> ignore
+                    cleanDb()
+                )
             
     AppDomain.CurrentDomain.ProcessExit
         |> Async.AwaitEvent
