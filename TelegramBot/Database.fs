@@ -2,6 +2,7 @@
 
 open Npgsql.FSharp
 open System
+open Logging
 
 type NewDbRecord = {
     currentState: int;
@@ -82,6 +83,7 @@ let updateState record =
 let cleanDb () =
     defaultConnection
         |> Sql.connect
-        |> Sql.query "DELETE FROM \"trackingnumbers\" WHERE totalstate <> 0 AND currentState = totalState"
+        |> Sql.query "DELETE FROM trackingnumbers WHERE totalstate <> 0 AND currentState = totalState"
         |> Sql.executeNonQuery
+        |> doLog "Deleted Lines"
         |> ignore
