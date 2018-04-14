@@ -1,27 +1,39 @@
 ﻿module ApiRequests
 
+module Async =
+    let map f x = async {
+        let! result = x
+        return f result
+    }
 open Newtonsoft.Json
 open ApiTypes
 open Converter
 open FSharp.Data
 open System
 
-let getUpdates botKey timeout offset =
+let rec getUpdatesAsync botKey timeout offset = async{
     let deserialize = 
         fun x -> JsonConvert.DeserializeObject<Response<Update array>>(x, new OptionConverter())
 
     let url = sprintf "https://api.telegram.org/bot%s/getupdates" botKey
-    try
-        Http.RequestString(url, query= 
-                [
-                    "offset", (offset.ToString());
-                    "timeout", (timeout.ToString())
-                ], timeout = timeout
-            )
-            |> deserialize
-            |> Some
-    with 
-        | ex when ex.InnerException.GetType() = typedefof<TimeoutException> -> None
+    let! result = Http.AsyncRequestString(url, query= 
+                                                    [
+                                                        "offset", (offset.ToString());
+                                                        "timeout", (timeout.ToString())
+                                                    ], timeout = timeout
+                    )
+                    |> Async.map deserialize
+                    |> Async.Catch
+
+    match result with
+    | Choice1Of2 x -> return Result.Ok x
+    | Choice2Of2 ex when ex.InnerException.GetType() = typedefof<TimeoutException> -> return! (getUpdatesAsync botKey timeout offset)
+    | Choice2Of2 ex -> return Result.Error ex
+}
+
+let getUpdates botkey timeout offset =
+    getUpdatesAsync botkey timeout offset
+    |> Async.RunSynchronously
 
 let sendMessage botKey (message: SendMessage) =
     let settings = new JsonSerializerSettings();

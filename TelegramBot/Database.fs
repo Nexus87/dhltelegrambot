@@ -3,6 +3,12 @@
 open Npgsql.FSharp
 open System
 
+type NewDbRecord = {
+    currentState: int;
+    totalState: int;
+    trackingNumber: string;
+    chatId: int64;
+}
 type DbRecord = {
     id: Guid;
     currentState: int;
@@ -22,14 +28,12 @@ let defaultConnection = System.Environment.GetEnvironmentVariable("DATABASE_URL"
                         |> Seq.toList
                         |> toConnectionString
 
-printfn "%s" defaultConnection
-
 let mapRecord = function
             | [
                 ("id", Uuid id);
                 ("currentstate", Int currentState);
                 ("totalstate", Int totalState);
-                ("chatid", Int chatId);
+                ("chatid", Sql.Long chatId);
                 ("trackingnumber", Sql.String trackingnumber)
                 ] -> 
                 Some { 
@@ -37,7 +41,7 @@ let mapRecord = function
                     currentState = currentState; 
                     totalState = totalState; 
                     trackingNumber = trackingnumber; 
-                    chatId = int64(chatId)
+                    chatId = chatId
                 }
             | _ -> None
 
@@ -48,14 +52,19 @@ let getUnfinishedTrackingNumbers () =
             |> Sql.executeTable
             |> Sql.mapEachRow mapRecord
 
-let addNewTrackingNumber chatId trackingNumber =
+let addNewTrackingNumber (record: NewDbRecord) =
     defaultConnection
         |> Sql.connect
-        |> Sql.query "INSERT INTO trackingnumbers (chatid, trackingnumber) VALUES (@chatId, @trackingNumber)"
+        |> Sql.query "INSERT INTO trackingnumbers (chatid, trackingnumber, currentstate, totalstate) VALUES (@chatId, @trackingNumber, @currentstate, @totalstate) RETURNING *"
         |> Sql.parameters 
-            [ "chatId", Int chatId
-              "ttrackingNumber", Sql.String trackingNumber ]
-        |> Sql.executeNonQuery
+            [ "chatId", Sql.Long record.chatId
+              "trackingNumber", Sql.String record.trackingNumber
+              "currentstate", Sql.Int record.currentState
+              "totalstate", Sql.Int record.totalState
+              ]
+        |> Sql.executeTable
+        |> Sql.mapEachRow mapRecord
+        |> Seq.head
 
 let updateState record =
     defaultConnection

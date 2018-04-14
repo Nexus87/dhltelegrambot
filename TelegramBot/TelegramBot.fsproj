@@ -6,14 +6,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Database.fs" />
     <Compile Include="Observable.fs" />
     <Compile Include="Api\Converter.fs" />
     <Compile Include="Api\ApiTypes.fs" />
     <Compile Include="Api\ApiRequests.fs" />
     <Compile Include="Api\TelegramBotApi.fs" />
     <Compile Include="DhlParser.fs" />
+    <Compile Include="Database.fs" />
     <Compile Include="GetMessages.fs" />
+    <Compile Include="MessageFilter.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
